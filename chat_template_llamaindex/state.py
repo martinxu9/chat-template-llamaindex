@@ -1,6 +1,15 @@
 import os
 import reflex as rx
-from openai import OpenAI
+
+from llama_index_client import ChatMessage, MessageRole
+from llama_index.core.chat_engine import CondenseQuestionChatEngine
+
+from traceloop.sdk.decorators import workflow
+
+from chat_template_llamaindex.rag_utils import (
+    load_remote_vector_store,
+    get_engine,
+)
 
 
 # Checking if the API key is set properly
@@ -37,6 +46,10 @@ class State(rx.State):
 
     # The name of the new chat.
     new_chat_name: str = ""
+
+    def load_engine(self):
+        """Load the chat engine."""
+        load_remote_vector_store()
 
     def create_chat(self):
         """Create a new chat."""
@@ -81,6 +94,7 @@ class State(rx.State):
         async for value in model(question):
             yield value
 
+    @workflow(name="chat-template-llamaindex-process-question")
     async def openai_process_question(self, question: str):
         """Get the response from the API.
 
@@ -97,40 +111,41 @@ class State(rx.State):
         yield
 
         # Build the messages.
-        messages = [
-            {
-                "role": "system",
-                "content": "You are a friendly chatbot named Reflex. Respond in markdown.",
-            }
-        ]
+        messages = []
         for qa in self.chats[self.current_chat]:
-            messages.append({"role": "user", "content": qa.question})
-            messages.append({"role": "assistant", "content": qa.answer})
+            messages.append(
+                ChatMessage(
+                    role=MessageRole.USER, content=qa.question, additional_kwargs={}
+                )
+            )
+            messages.append(
+                ChatMessage(
+                    role=MessageRole.ASSISTANT, content=qa.answer, additional_kwargs={}
+                )
+            )
 
         # Remove the last mock answer.
         messages = messages[:-1]
 
-        # Start a new session to answer the question.
-        session = OpenAI().chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
-            messages=messages,
-            stream=True,
+        # Start a new session.
+        chat_engine = CondenseQuestionChatEngine.from_defaults(
+            query_engine=get_engine(),
+            chat_history=messages,
+            verbose=True,
         )
+        streaming_response = chat_engine.stream_chat(question)
 
         # Stream the results, yielding after every word.
-        for item in session:
-            if hasattr(item.choices[0].delta, "content"):
-                answer_text = item.choices[0].delta.content
-                # Ensure answer_text is not None before concatenation
-                if answer_text is not None:
-                    self.chats[self.current_chat][-1].answer += answer_text
-                else:
-                    # Handle the case where answer_text is None, perhaps log it or assign a default value
-                    # For example, assigning an empty string if answer_text is None
-                    answer_text = ""
-                    self.chats[self.current_chat][-1].answer += answer_text
-                self.chats = self.chats
-                yield
+        for item in streaming_response.response_gen:
+            # Ensure answer_text is not None before concatenation
+            if item is not None:
+                self.chats[self.current_chat][-1].answer += item
+            else:
+                # Handle the case where answer_text is None, perhaps log it or assign a default value
+                # For example, assigning an empty string if answer_text is None
+                self.chats[self.current_chat][-1].answer += ""
+            self.chats = self.chats
+            yield
 
         # Toggle the processing flag.
         self.processing = False

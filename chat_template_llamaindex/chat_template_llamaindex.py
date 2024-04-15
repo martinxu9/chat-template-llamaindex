@@ -2,6 +2,10 @@
 
 import reflex as rx
 from chat_template_llamaindex.components import chat, navbar
+from chat_template_llamaindex.state import State
+from traceloop.sdk import Traceloop
+
+Traceloop.init()
 
 
 def index() -> rx.Component:
@@ -22,7 +26,7 @@ def index() -> rx.Component:
 app = rx.App(
     theme=rx.theme(
         appearance="dark",
-        accent_color="violet",
+        accent_color="sky",
     ),
 )
-app.add_page(index)
+app.add_page(index, on_load=State.load_engine)  # type: ignore
