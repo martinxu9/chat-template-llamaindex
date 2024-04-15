@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "chat-template-llamaindex"
+version = "0.1.0"
+description = ""
+authors = ["Martin Xu <15661672+martinxu9@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+reflex = "^0.4.7"
+llama-index = "^0.10.29"
+traceloop-sdk = "^0.16.3"
+llama-index-vector-stores-weaviate = "^0.1.4"
+langchain-text-splitters = "^0.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
